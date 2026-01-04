@@ -9,7 +9,7 @@ public class GameManager : NetworkBehaviour
 
     public Vector2Int gridSize = new Vector2Int(7, 7);
     [SerializeField] TileSpawner tileSpawner;
-    [SerializeField] GameObject playerPrefab;
+    [SerializeField] PlayerController playerPrefab;
 
     public Vector2Int player1Start = new Vector2Int(0, 3);
     public Vector2Int player2Start = new Vector2Int(6, 3);
@@ -46,12 +46,9 @@ public class GameManager : NetworkBehaviour
     void SpawnPlayerAt(Vector2Int pos, int playerIndex)
     {
         Vector3 worldPos = new Vector3(pos.x, pos.y, 0);
-        GameObject playerObj = Instantiate(playerPrefab, worldPos, Quaternion.identity);
+        PlayerController pc = Instantiate(playerPrefab, worldPos, Quaternion.identity);
 
-        NetworkObject netObj = playerObj.GetComponent<NetworkObject>();
-        PlayerController pc = playerObj.GetComponent<PlayerController>();
-
-        netObj.Spawn();
+        pc.NetworkObject.Spawn();
         pc.SetPlayerIndex(playerIndex);
 
         players[playerIndex] = pc;
