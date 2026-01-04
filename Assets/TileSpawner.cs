@@ -1,24 +1,22 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class TileSpawner : MonoBehaviour
 {
     [SerializeField] GameObject tilePrefab;
-    [SerializeField] Storage storage;
-    
-    
+    [SerializeField] GameManager gameManager;
 
-    public void Spawn(Vector2 prop)
+    public void Spawn(Vector2Int gridSize)
     {
-        for(int x = 0; x<prop.x; x++)
+        for (int x = 0; x < gridSize.x; x++)
         {
-            for(int z = 0; z<prop.y; z++)
+            for (int y = 0; y < gridSize.y; y++)
             {
-                GameObject tile = Instantiate(tilePrefab, new Vector3(x, 0, z), Quaternion.identity, transform);
-                tile.GetComponent<TileScript>().Initiate(new Vector2(x, z), (x + z) % 2);
-                tile.name = $"Tile : {x}, {z}";
-                storage.setTileAtPos(new Vector2(x, z),gameObject);
+                Vector2Int pos = new Vector2Int(x, y);
+                GameObject tile = Instantiate(tilePrefab, new Vector3(x, y, 0), Quaternion.identity, transform);
+                TileScript tileScript = tile.GetComponent<TileScript>();
+                tileScript.Initiate(pos, (x + y) % 2);
+                tile.name = $"Tile_{x}_{y}";
+                gameManager.RegisterTile(pos, tileScript);
             }
         }
     }
