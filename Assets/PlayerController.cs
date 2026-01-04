@@ -4,8 +4,6 @@ using UnityEngine;
 public class PlayerController : NetworkBehaviour
 {
     public int playerIndex = -1;
-
-    // Reference to ghost player object (you set this up visually)
     public GameObject ghostPlayer;
 
     public override void OnNetworkSpawn()
@@ -14,11 +12,18 @@ public class PlayerController : NetworkBehaviour
         {
             gameObject.AddComponent<PathBuilder>();
         }
+
+        // Register with GameManager on all clients
+        if (playerIndex >= 0)
+        {
+            GameManager.Instance.RegisterPlayer(playerIndex, this);
+        }
     }
 
     public void SetPlayerIndex(int index)
     {
         playerIndex = index;
+        GameManager.Instance.RegisterPlayer(index, this);
         SetPlayerIndexClientRpc(index);
     }
 
@@ -26,6 +31,7 @@ public class PlayerController : NetworkBehaviour
     void SetPlayerIndexClientRpc(int index)
     {
         playerIndex = index;
+        GameManager.Instance.RegisterPlayer(index, this);
     }
 
     public void SetGhostPosition(Vector2Int pos)

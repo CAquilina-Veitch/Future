@@ -11,18 +11,17 @@ public class GameManager : NetworkBehaviour
     [SerializeField] TileSpawner tileSpawner;
     [SerializeField] GameObject playerPrefab;
 
-    // Player starting positions (like chess: a4 and g4 on 7x7)
     public Vector2Int player1Start = new Vector2Int(0, 3);
     public Vector2Int player2Start = new Vector2Int(6, 3);
 
-    Dictionary<Vector2Int, GameObject> playerPositions = new Dictionary<Vector2Int, GameObject>();
+    // Store players directly by index
+    PlayerController[] players = new PlayerController[2];
+    Vector2Int[] playerPositions = new Vector2Int[2];
+
     Dictionary<Vector2Int, TileScript> tiles = new Dictionary<Vector2Int, TileScript>();
 
-    // Turn submission storage
     List<Vector2Int>[] submittedPaths = new List<Vector2Int>[2];
     bool[] hasSubmitted = new bool[2];
-
-    // Resolution state
     bool isResolving = false;
 
     void Awake()
@@ -47,10 +46,16 @@ public class GameManager : NetworkBehaviour
     void SpawnPlayerAt(Vector2Int pos, int playerIndex)
     {
         Vector3 worldPos = new Vector3(pos.x, pos.y, 0);
-        GameObject player = Instantiate(playerPrefab, worldPos, Quaternion.identity);
-        player.GetComponent<NetworkObject>().Spawn();
-        player.GetComponent<PlayerController>().SetPlayerIndex(playerIndex);
-        playerPositions[pos] = player;
+        GameObject playerObj = Instantiate(playerPrefab, worldPos, Quaternion.identity);
+
+        NetworkObject netObj = playerObj.GetComponent<NetworkObject>();
+        PlayerController pc = playerObj.GetComponent<PlayerController>();
+
+        netObj.Spawn();
+        pc.SetPlayerIndex(playerIndex);
+
+        players[playerIndex] = pc;
+        playerPositions[playerIndex] = pos;
     }
 
     public void RegisterTile(Vector2Int pos, TileScript tile)
@@ -65,7 +70,7 @@ public class GameManager : NetworkBehaviour
 
     public bool IsTileEmpty(Vector2Int pos)
     {
-        return !playerPositions.ContainsKey(pos);
+        return pos != playerPositions[0] && pos != playerPositions[1];
     }
 
     public TileScript GetTileAt(Vector2Int pos)
@@ -75,28 +80,12 @@ public class GameManager : NetworkBehaviour
 
     public Vector2Int GetPlayerPosition(int playerIndex)
     {
-        foreach (var kvp in playerPositions)
-        {
-            PlayerController pc = kvp.Value.GetComponent<PlayerController>();
-            if (pc.playerIndex == playerIndex)
-            {
-                return kvp.Key;
-            }
-        }
-        return playerIndex == 0 ? player1Start : player2Start;
+        return playerPositions[playerIndex];
     }
 
-    public GameObject GetPlayerObject(int playerIndex)
+    public PlayerController GetPlayer(int playerIndex)
     {
-        foreach (var kvp in playerPositions)
-        {
-            PlayerController pc = kvp.Value.GetComponent<PlayerController>();
-            if (pc.playerIndex == playerIndex)
-            {
-                return kvp.Value;
-            }
-        }
-        return null; // Will error if used when player doesn't exist
+        return players[playerIndex];
     }
 
     [ServerRpc(RequireOwnership = false)]
@@ -118,15 +107,12 @@ public class GameManager : NetworkBehaviour
         isResolving = true;
         NotifyResolutionStartClientRpc();
 
-        int maxSteps = Mathf.Max(
-            submittedPaths[0].Count,
-            submittedPaths[1].Count
-        );
+        int maxSteps = Mathf.Max(submittedPaths[0].Count, submittedPaths[1].Count);
 
         bool[] stopped = new bool[2];
         Vector2Int[] currentPos = new Vector2Int[2];
-        currentPos[0] = GetPlayerPosition(0);
-        currentPos[1] = GetPlayerPosition(1);
+        currentPos[0] = playerPositions[0];
+        currentPos[1] = playerPositions[1];
 
         for (int step = 0; step < maxSteps; step++)
         {
@@ -147,7 +133,7 @@ public class GameManager : NetworkBehaviour
                 }
             }
 
-            // Check for collision: both trying to move to same tile
+            // Both trying to move to same tile
             if (wantsToMove[0] && wantsToMove[1] && targetPos[0] == targetPos[1])
             {
                 stopped[0] = true;
@@ -159,12 +145,12 @@ public class GameManager : NetworkBehaviour
                 {
                     if (!wantsToMove[p] || stopped[p]) continue;
 
-                    int otherPlayer = 1 - p;
+                    int other = 1 - p;
 
-                    // Check if target is occupied by other player who isn't moving away
-                    if (targetPos[p] == currentPos[otherPlayer])
+                    // Target occupied by other player who isn't moving away
+                    if (targetPos[p] == currentPos[other])
                     {
-                        if (!wantsToMove[otherPlayer] || targetPos[otherPlayer] == currentPos[otherPlayer])
+                        if (!wantsToMove[other] || targetPos[other] == currentPos[other])
                         {
                             stopped[p] = true;
                         }
@@ -177,8 +163,9 @@ public class GameManager : NetworkBehaviour
             {
                 if (wantsToMove[p] && !stopped[p])
                 {
-                    MovePlayer(p, currentPos[p], targetPos[p]);
                     currentPos[p] = targetPos[p];
+                    playerPositions[p] = targetPos[p];
+                    players[p].transform.position = new Vector3(targetPos[p].x, targetPos[p].y, 0);
                 }
             }
 
@@ -186,7 +173,6 @@ public class GameManager : NetworkBehaviour
             yield return new WaitForSeconds(0.5f);
         }
 
-        // Reset for next turn
         hasSubmitted[0] = false;
         hasSubmitted[1] = false;
         submittedPaths[0] = null;
@@ -196,21 +182,11 @@ public class GameManager : NetworkBehaviour
         NotifyResolutionEndClientRpc();
     }
 
-    void MovePlayer(int playerIndex, Vector2Int from, Vector2Int to)
-    {
-        GameObject player = GetPlayerObject(playerIndex);
-        playerPositions.Remove(from);
-        playerPositions[to] = player;
-        player.transform.position = new Vector3(to.x, to.y, 0);
-    }
-
     [ClientRpc]
     void UpdatePlayerPositionsClientRpc(Vector2Int pos0, Vector2Int pos1)
     {
-        GameObject p0 = GetPlayerObject(0);
-        GameObject p1 = GetPlayerObject(1);
-        p0.transform.position = new Vector3(pos0.x, pos0.y, 0);
-        p1.transform.position = new Vector3(pos1.x, pos1.y, 0);
+        players[0].transform.position = new Vector3(pos0.x, pos0.y, 0);
+        players[1].transform.position = new Vector3(pos1.x, pos1.y, 0);
     }
 
     [ClientRpc]
@@ -234,6 +210,13 @@ public class GameManager : NetworkBehaviour
         {
             if (pb.IsOwner) return pb;
         }
-        return null; // Will error if no local PathBuilder
+        return null;
+    }
+
+    // Called by clients to register their player reference
+    public void RegisterPlayer(int playerIndex, PlayerController pc)
+    {
+        players[playerIndex] = pc;
+        playerPositions[playerIndex] = playerIndex == 0 ? player1Start : player2Start;
     }
 }
