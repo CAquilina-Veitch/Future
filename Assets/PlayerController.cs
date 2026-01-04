@@ -1,28 +1,47 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
 using Unity.Netcode;
+using UnityEngine;
 
 public class PlayerController : NetworkBehaviour
 {
-    public int playerId = -1;
+    public int playerIndex = -1;
+    public GameObject ghostPlayer;
 
     public override void OnNetworkSpawn()
     {
-        if (!IsOwner) Destroy(this);
-        playerId = NetworkBehaviourId;
+        if (IsOwner)
+        {
+            gameObject.AddComponent<PathBuilder>();
+        }
+
+        // Register with GameManager on all clients
+        if (playerIndex >= 0)
+        {
+            GameManager.Instance.RegisterPlayer(playerIndex, this);
+        }
     }
 
-
-    // Start is called before the first frame update
-    void Start()
+    public void SetPlayerIndex(int index)
     {
-        
+        playerIndex = index;
+        GameManager.Instance.RegisterPlayer(index, this);
+        SetPlayerIndexClientRpc(index);
     }
 
-    // Update is called once per frame
-    void Update()
+    [ClientRpc]
+    void SetPlayerIndexClientRpc(int index)
     {
-        
+        playerIndex = index;
+        GameManager.Instance.RegisterPlayer(index, this);
+    }
+
+    public void SetGhostPosition(Vector2Int pos)
+    {
+        ghostPlayer.transform.position = new Vector3(pos.x, pos.y, 0);
+        ghostPlayer.SetActive(true);
+    }
+
+    public void HideGhost()
+    {
+        ghostPlayer.SetActive(false);
     }
 }
